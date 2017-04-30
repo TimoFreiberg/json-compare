@@ -1,38 +1,61 @@
 {-# LANGUAGE ViewPatterns #-}
 
-module JsonDiff where
+module JsonDiff
+  ( diffStructures
+  ) where
 
--- import qualified Control.Monad.State.Strict as State
--- import Control.Monad.State.Strict (modify, get)
 import Data.Aeson (Value)
 import qualified Data.Aeson as Json
 import Data.Aeson (ToJSON)
 import Data.Aeson.Encode.Pretty (encodePretty)
 import qualified Data.HashMap.Strict as Map
 import Data.HashMap.Strict (HashMap)
-import Data.Text (unlines)
-import qualified Data.Vector as Vector
+import qualified Data.Text as Text
 import Lib.Prelude
 
+type JsonPath = [JsonPathStep]
+
+data JsonPathStep
+  = Root
+  | Key Text
+  | Ix Int
+  deriving (Show)
+
 data JsonDiff
-  = KeyNotPresent Text
-  | NotFoundInArray [Value]
+  = KeyNotPresent JsonPath
+                  Text
+  | NotFoundInArray JsonPath
+                    [Value]
                     Value
-  | WrongType Value
+  | WrongType JsonPath
+              Value
               Value
   deriving (Show)
 
+test :: IO ()
+test = putText $prettyDiff $ diffStructures obj1 obj2
+
 prettyDiff :: [JsonDiff] -> Text
-prettyDiff = unlines . map singlePretty
+prettyDiff = Text.unlines . map singlePretty
   where
     singlePretty :: JsonDiff -> Text
-    singlePretty (KeyNotPresent t) = "Key not found: " <> t
-    singlePretty (NotFoundInArray arr val) =
+    singlePretty (KeyNotPresent p t) = "Key not found: " <> t <> prettyPath p
+    singlePretty (NotFoundInArray p arr val) =
       "No structure matching " <> prettyText val <> " found in " <>
-      prettyText arr
-    singlePretty (WrongType expected actual) =
+      prettyText arr <>
+      prettyPath p
+    singlePretty (WrongType p expected actual) =
       "Wrong type, expected: " <> prettyText expected <> ", actual: " <>
-      prettyText actual
+      prettyText actual <>
+      prettyPath p
+    prettyPath :: JsonPath -> Text
+    prettyPath p =
+      "\nFound at path: " <>
+      (Text.concat . intersperse "." $ map prettyStep (reverse p))
+    prettyStep :: JsonPathStep -> Text
+    prettyStep Root = "$"
+    prettyStep (Key k) = k
+    prettyStep (Ix i) = show i
     prettyText
       :: ToJSON a
       => a -> Text
@@ -45,25 +68,39 @@ diffStructures
   :: Value -- ^ expected
   -> Value -- ^ actual
   -> [JsonDiff] -- ^ differences from actual to expected
-diffStructures _ Json.Null = []
-diffStructures (Json.Bool _) (Json.Bool _) = []
-diffStructures (Json.Number _) (Json.Number _) = []
-diffStructures (Json.String _) (Json.String _) = []
-diffStructures (Json.Object expected) (Json.Object actual) =
-  snd $ foldr objDiffStep (expected, []) (Map.toList actual)
-diffStructures (Json.Array expected) (Json.Array actual) =
-  snd $ foldr arrayDiffStep (Vector.toList expected, []) (actual)
-diffStructures expected actual = [WrongType expected actual]
+diffStructures expected actual =
+  runReader (diffStructureWithPath expected actual) [Root]
 
-diff expected actual = evalState (runDiff expected actual) ([], [])
+diffStructureWithPath :: Value -> Value -> Reader JsonPath [JsonDiff]
+diffStructureWithPath _ Json.Null = return []
+    -- null is a valid subset of any JSON
+diffStructureWithPath (Json.Bool _) (Json.Bool _) = return []
+diffStructureWithPath (Json.Number _) (Json.Number _) = return []
+diffStructureWithPath (Json.String _) (Json.String _) = return []
+diffStructureWithPath (Json.Object expected) (Json.Object actual) =
+  let pairs :: [(Text, Value)]
+      pairs = Map.toList actual
+      f :: (Text, Value) -> Reader JsonPath [JsonDiff]
+      f pair@(k, _) = local ((Key k) :) (objDiffStep expected pair)
+  in concat <$> traverse f pairs
+diffStructureWithPath (Json.Array expected) (Json.Array actual) =
+  concat <$>
+  traverse (arrayDiffStep (toList expected)) (zip [0 :: Int ..] $ toList actual)
+diffStructureWithPath a b = ask >>= \path -> return [WrongType path a b]
 
-runDiff :: Value -> Value -> State [JsonDiff]
-runDiff expected actual =
-  if sameShape expected actual
-    then undefined -- DFS into the structures
-    else do
-      (path, diff) <- get
-      return (diff ++ [WrongType expected actual]) -- add path info here
+objDiffStep :: HashMap Text Value -> (Text, Value) -> Reader JsonPath [JsonDiff]
+objDiffStep expected (k, vActual) =
+  case Map.lookup k expected of
+    Just vExpected -> diffStructureWithPath vExpected vActual
+    Nothing -> ask >>= \path -> return [KeyNotPresent path k]
+
+arrayDiffStep :: [Value] -> (Int, Value) -> Reader JsonPath [JsonDiff]
+arrayDiffStep expected (n, actual) =
+  local ((Ix n) :) $
+  case filter (sameShape actual) expected of
+    [] -> ask >>= \path -> return [NotFoundInArray path expected actual]
+    xs -> concat <$> traverse (`diffStructureWithPath` actual) xs
+      -- FIXME return differences of object with least differences
 
 sameShape :: Value -> Value -> Bool
 sameShape Json.Null Json.Null = True
@@ -73,22 +110,6 @@ sameShape (Json.String _) (Json.String _) = True
 sameShape (Json.Object _) (Json.Object _) = True
 sameShape (Json.Array _) (Json.Array _) = True
 sameShape _ _ = False
-
-objDiffStep
-  :: (Text, Value)
-  -> (HashMap Text Value, [JsonDiff])
-  -> (HashMap Text Value, [JsonDiff])
-objDiffStep (k, vActual) (expected1, diffs) =
-  case Map.lookup k expected1 of
-    Just vExpected ->
-      (Map.delete k expected1, diffs ++ diffStructures vExpected vActual)
-    Nothing -> (expected1, diffs ++ [KeyNotPresent k])
-
-arrayDiffStep :: Value -> ([Value], [JsonDiff]) -> ([Value], [JsonDiff])
-arrayDiffStep actual (expected, diffs) =
-  case filter (sameShape actual) expected of
-    [] -> (expected, diffs ++ [NotFoundInArray expected actual])
-    xs -> (expected, diffs ++ concatMap (\x -> diffStructures x actual) xs)
 
 obj1 :: Value
 obj1 =
