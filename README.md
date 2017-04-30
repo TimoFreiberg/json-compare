@@ -1,3 +1,3 @@
 # json-compare
 
-add description of json-compare here
+Compares two JSON documents by structure.
