@@ -68,38 +68,37 @@ diffStructures
   :: Value -- ^ expected
   -> Value -- ^ actual
   -> [JsonDiff] -- ^ differences from actual to expected
-diffStructures expected actual =
-  runReader (diffStructureWithPath expected actual) [Root]
+diffStructures expected actual = diffStructureWithPath [Root] expected actual
 
-diffStructureWithPath :: Value -> Value -> Reader JsonPath [JsonDiff]
-diffStructureWithPath _ Json.Null = return []
+diffStructureWithPath :: JsonPath -> Value -> Value -> [JsonDiff]
+diffStructureWithPath _ _ Json.Null = []
     -- null is a valid subset of any JSON
-diffStructureWithPath (Json.Bool _) (Json.Bool _) = return []
-diffStructureWithPath (Json.Number _) (Json.Number _) = return []
-diffStructureWithPath (Json.String _) (Json.String _) = return []
-diffStructureWithPath (Json.Object expected) (Json.Object actual) =
-  let pairs :: [(Text, Value)]
-      pairs = Map.toList actual
-      f :: (Text, Value) -> Reader JsonPath [JsonDiff]
-      f pair@(k, _) = local ((Key k) :) (objDiffStep expected pair)
-  in concat <$> traverse f pairs
-diffStructureWithPath (Json.Array expected) (Json.Array actual) =
-  concat <$>
-  traverse (arrayDiffStep (toList expected)) (zip [0 :: Int ..] $ toList actual)
-diffStructureWithPath a b = ask >>= \path -> return [WrongType path a b]
+diffStructureWithPath _ (Json.Bool _) (Json.Bool _) = []
+diffStructureWithPath _ (Json.Number _) (Json.Number _) = []
+diffStructureWithPath _ (Json.String _) (Json.String _) = []
+diffStructureWithPath path (Json.Object expected) (Json.Object actual) =
+  concatMap (objDiffStep path expected) (Map.toList actual)
+diffStructureWithPath path (Json.Array expected) (Json.Array actual) =
+  concatMap
+    (arrayDiffStep path (toList expected))
+    (zip [0 :: Int ..] $ toList actual)
+diffStructureWithPath path a b = [WrongType path a b]
 
-objDiffStep :: HashMap Text Value -> (Text, Value) -> Reader JsonPath [JsonDiff]
-objDiffStep expected (k, vActual) =
+objDiffStep :: JsonPath -> HashMap Text Value -> (Text, Value) -> [JsonDiff]
+objDiffStep path expected (k, vActual) =
   case Map.lookup k expected of
-    Just vExpected -> diffStructureWithPath vExpected vActual
-    Nothing -> ask >>= \path -> return [KeyNotPresent path k]
+    Just vExpected -> diffStructureWithPath newPath vExpected vActual
+    Nothing -> [KeyNotPresent newPath k]
+  where
+    newPath = Key k : path
 
-arrayDiffStep :: [Value] -> (Int, Value) -> Reader JsonPath [JsonDiff]
-arrayDiffStep expected (n, actual) =
-  local ((Ix n) :) $
+arrayDiffStep :: JsonPath -> [Value] -> (Int, Value) -> [JsonDiff]
+arrayDiffStep path expected (n, actual) =
   case filter (sameShape actual) expected of
-    [] -> ask >>= \path -> return [NotFoundInArray path expected actual]
-    xs -> concat <$> traverse (`diffStructureWithPath` actual) xs
+    [] -> [NotFoundInArray newPath expected actual]
+    xs -> concat $ traverse (\x -> diffStructureWithPath newPath x actual) xs
+  where
+    newPath = Ix n : path
       -- FIXME return differences of object with least differences
 
 sameShape :: Value -> Value -> Bool
