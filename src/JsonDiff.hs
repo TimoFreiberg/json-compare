@@ -2,6 +2,8 @@
 
 module JsonDiff
   ( diffStructures
+  , prettyDiff
+  , JsonDiff
   ) where
 
 import Data.Aeson (Value)
@@ -31,9 +33,6 @@ data JsonDiff
               Value
               Value
   deriving (Show)
-
-test :: IO ()
-test = putText $prettyDiff $ diffStructures obj1 obj2
 
 prettyDiff :: [JsonDiff] -> Text
 prettyDiff = Text.unlines . map singlePretty
@@ -109,15 +108,3 @@ sameShape (Json.String _) (Json.String _) = True
 sameShape (Json.Object _) (Json.Object _) = True
 sameShape (Json.Array _) (Json.Array _) = True
 sameShape _ _ = False
-
-obj1 :: Value
-obj1 =
-  (\(Just x) -> x) $
-  Json.decode
-    "[{\"serviceId\": 0, \"serviceName\": \"string\", \"requiredServiceDataItems\": [{\"profileDataFieldItem\": {\"fieldOwnerType\": \"ACCOUNT\", \"itemId\": \"USER_ID\", \"profileDataFieldRelationshipType\": \"GROUP\", \"childrenIds\": [\"USER_ID\"]}, \"profileDataFieldGroup\": {\"itemId\": \"string\", \"profileDataFieldRelationshipType\": \"GROUP\", \"childrenIds\": [\"USER_ID\"]}}], \"requiredCustomProperties\": [\"string\"]}]"
-
-obj2 :: Value
-obj2 =
-  (\(Just x) -> x) $
-  Json.decode
-    "[{\"serviceId\": 0, \"serviceName\": \"string\", \"requiredServiceDataItems\": [{\"profileDataFieldItem\": {\"fieldOwnerType\": \"ACCOUNT\", \"itemId\": \"USER_ID\", \"profileDataFieldRelationshipType\": \"GROUP\", \"childrenIds\": [\"USER_ID\", \"shouldNotBeFound\"]}, \"profileDataFieldGroup\": {\"itemId\": \"string\", \"profileDataFieldRelationshipType\": {\"test\": 15}, \"childrenIds\": [\"USER_ID\"]}}], \"requiredCustomProperties\": [15]}]"
