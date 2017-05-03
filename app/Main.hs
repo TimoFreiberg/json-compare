@@ -3,9 +3,17 @@ module Main where
 import Data.Aeson (eitherDecode)
 import GHC.Base (String)
 import JsonDiff (JsonDiff, prettyDiff, diffStructures)
-import Options.Applicative as Opt
+import qualified Options.Applicative as Opt
+import Options.Applicative (argument, auto, metavar, long)
 import Protolude
 
+-- fileName name = argument auto (long name <> metavar "FILE")
+data Args = Args
+  { fileExpected :: FilePath
+  , fileActual :: FilePath
+  }
+
+-- parseArgs = Args <$> fileName "file_expected" <*> fileName "file_actual"
 main :: IO ()
 main = do
   args <- getArgs
@@ -23,7 +31,7 @@ main = do
       exit
         ("invalid argument " <> show other <> ". Please input two file names")
 
-exit :: Text -> IO b
+exit :: Text -> IO a
 exit message = putText message >> exitFailure
 
 runDiff :: Text -> Text -> Either String [JsonDiff]
