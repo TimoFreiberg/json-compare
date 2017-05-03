@@ -13,7 +13,7 @@ import Data.Aeson.Encode.Pretty (encodePretty)
 import qualified Data.HashMap.Strict as Map
 import Data.HashMap.Strict (HashMap)
 import qualified Data.Text as Text
-import Lib.Prelude
+import Protolude
 
 type JsonPath = [JsonPathStep]
 
