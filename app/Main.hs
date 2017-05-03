@@ -1,35 +1,38 @@
+{-# LANGUAGE LambdaCase #-}
+
 module Main where
 
 import Data.Aeson (eitherDecode)
 import GHC.Base (String)
 import JsonDiff (JsonDiff, prettyDiff, diffStructures)
 import qualified Options.Applicative as Opt
-import Options.Applicative (argument, auto, metavar, long)
+import Options.Applicative (argument, str, metavar, help)
 import Protolude
 
--- fileName name = argument auto (long name <> metavar "FILE")
 data Args = Args
   { fileExpected :: FilePath
   , fileActual :: FilePath
   }
 
--- parseArgs = Args <$> fileName "file_expected" <*> fileName "file_actual"
+parseArgs :: Opt.Parser Args
+parseArgs =
+  Args <$> argument str (metavar "FILE1" <> help "The expected JSON") <*>
+  argument str (metavar "FILE2" <> help "The actual JSON")
+
+opts :: Opt.ParserInfo Args
+opts =
+  Opt.info
+    (Opt.helper <*> parseArgs)
+    (Opt.fullDesc <> Opt.progDesc "Diffs two JSON documents by structure" <>
+     Opt.header "json-diff: structural differ")
+
 main :: IO ()
 main = do
-  args <- getArgs
-  case args of
-    [f1, f2] -> do
-      json1 <- readFile f1
-      json2 <- readFile f2
-      case runDiff json1 json2 of
-        Right diff ->
-          case diff of
-            [] -> exitSuccess
-            diffs@(_:_) -> exit . prettyDiff $ diffs
-        Left parseErr -> exit . strConv Lenient $ parseErr
-    other ->
-      exit
-        ("invalid argument " <> show other <> ". Please input two file names")
+  (Args expected actual) <- Opt.execParser opts
+  runDiff <$> readFile expected <*> readFile actual >>= \case
+    Right [] -> exitSuccess
+    Right diffs -> exit (prettyDiff diffs)
+    Left err -> exit (strConv Lenient err)
 
 exit :: Text -> IO a
 exit message = putText message >> exitFailure
