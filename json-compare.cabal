@@ -36,6 +36,7 @@ executable json-compare
                      , json-compare
                      , protolude >= 0.1.6 && < 0.2
                      , aeson
+                     , optparse-applicative
   default-language:    Haskell2010
   default-extensions:  OverloadedStrings, NoImplicitPrelude
 

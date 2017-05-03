@@ -2,7 +2,8 @@ module Main where
 
 import Data.Aeson (eitherDecode)
 import GHC.Base (String)
-import JsonDiff
+import JsonDiff (JsonDiff, prettyDiff, diffStructures)
+import Options.Applicative as Opt
 import Protolude
 
 main :: IO ()
@@ -13,11 +14,17 @@ main = do
       json1 <- readFile f1
       json2 <- readFile f2
       case runDiff json1 json2 of
-        Right diff -> putText . prettyDiff $ diff
-        Left parseErr -> putStrLn parseErr
+        Right diff ->
+          case diff of
+            [] -> exitSuccess
+            diffs@(_:_) -> exit . prettyDiff $ diffs
+        Left parseErr -> exit . strConv Lenient $ parseErr
     other ->
-      putText
+      exit
         ("invalid argument " <> show other <> ". Please input two file names")
+
+exit :: Text -> IO b
+exit message = putText message >> exitFailure
 
 runDiff :: Text -> Text -> Either String [JsonDiff]
 runDiff expected actual =
