@@ -8,8 +8,12 @@ This usually means hotfixing, and therefore making sure that this time, the mess
 Since this is obviously a recipe for disaster, I wrote a tool to diff JSON structure for me.
 I used [Haskell](https://www.haskell.org), my favorite functional programming language.
 
-## Problem description
+## My problem
 
+I needed to verify that the JSON structure our application accepts is a valid subset of the JSON structure that actually sent from the other system.
+That simply means that the fields we read must exist in the message we actually get, but it's okay if we ignore some fields.
+
+After comparing the documentation with what our local mocker generated and looking really hard, I wanted something more trustworthy than eyes.
 
 
 ## description of algorithm, with code
