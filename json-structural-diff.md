@@ -62,7 +62,10 @@ diffStructures
 diffStructures expected actual = diffStructureWithPath [Root] expected actual
 ```
 
-If you're unfamiliar with Haskell syntax, `diffStructures` is a function that takes a `Value` 
+If you're unfamiliar with Haskell syntax, `diffStructures` is a function that takes a `Value`, then another `Value` and returns a list of `JsonDiff`s
+
+The actual algorithm is implemented in a private helper function which takes the path as an additional parameter.
+The path always starts with `Root`.
 
 ```haskell
 diffStructureWithPath :: JsonPath -> Value -> Value -> [JsonDiff]
