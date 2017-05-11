@@ -8,23 +8,63 @@ This usually means hotfixing, and therefore making sure that this time, the mess
 Since this is obviously a recipe for disaster, I wrote a tool to diff JSON structure for me.
 I used [Haskell](https://www.haskell.org), my favorite functional programming language.
 
-## My problem
+## The problem
 
 I needed to verify that the JSON structure our application accepts is a valid subset of the JSON structure that actually sent from the other system.
-That simply means that the fields we read must exist in the message we actually get, but it's okay if we ignore some fields.
 
-After comparing the documentation with what our local mocker generated and looking really hard, I wanted something more trustworthy than eyes.
+That simply means that the data we read must exist in the message we actually get, but it's okay if we ignore some fields.
 
+Structural differences are possible at object keys and array elements.
+Additionally, JSON values at the same path might have a different type.
 
-## description of algorithm, with code
+## The solution, with code
+
+I represented the possible structural differences with the following [data type](https://en.wikipedia.org/wiki/Algebraic_data_type):
+
+```haskell
+data JsonDiff
+  = KeyNotPresent JsonPath -- ^ the path to the object
+                  Text -- ^ the key that was not found
+  | NotFoundInArray JsonPath -- ^ the path to the array
+                    [Value] -- ^ the elements in the array
+                    Value -- ^ the element that was not found
+  | WrongType JsonPath -- ^ the path to the JSON value
+              Value -- ^ the expected value
+              Value -- ^ the actual value
+  deriving (Show)
+```
+
+These data structures represent the entire result of the structural diff:
+
+1. where the diff was found
+2. the type of mismatch (via the constructor)
+3. the mismatched values
+
+The path is defined like this:
+
+```haskell
+data JsonPathStep
+  = Root -- ^ Root of the JSON document
+  | Key Text -- ^ Key of an object
+  | Ix Int -- ^ Index of an array
+  deriving (Show)
+
+type JsonPath = [JsonPathStep]
+```
+
+The actual diffing is done by the following function:
 
 ```haskell
 diffStructures
-  :: Value -- ^ expected
-  -> Value -- ^ actual
+  :: Value -- ^ expected/what we want to match
+  -> Value -- ^ actual/what we implemented
   -> [JsonDiff] -- ^ differences from actual to expected
 diffStructures expected actual = diffStructureWithPath [Root] expected actual
+```
 
+If you're unfamiliar with Haskell syntax, `diffStructures` is a function that takes a `Value` 
+
+```haskell
 diffStructureWithPath :: JsonPath -> Value -> Value -> [JsonDiff]
 diffStructureWithPath _ _ Json.Null = []
     -- null is a valid subset of any JSON

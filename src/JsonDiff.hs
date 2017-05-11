@@ -18,20 +18,20 @@ import Protolude
 type JsonPath = [JsonPathStep]
 
 data JsonPathStep
-  = Root
-  | Key Text
-  | Ix Int
+  = Root -- ^ Root of the JSON document
+  | Key Text -- ^ Key of an object
+  | Ix Int -- ^ Index of an array
   deriving (Show)
 
 data JsonDiff
-  = KeyNotPresent JsonPath
-                  Text
-  | NotFoundInArray JsonPath
-                    [Value]
-                    Value
-  | WrongType JsonPath
-              Value
-              Value
+  = KeyNotPresent JsonPath -- ^ the path to the object
+                  Text -- ^ the key that was not found
+  | NotFoundInArray JsonPath -- ^ the path to the array
+                    [Value] -- ^ the elements in the array
+                    Value -- ^ the element that was not found
+  | WrongType JsonPath -- ^ the path to the JSON value
+              Value -- ^ the expected value
+              Value -- ^ the actual value
   deriving (Show)
 
 prettyDiff :: [JsonDiff] -> Text
@@ -55,16 +55,14 @@ prettyDiff = Text.unlines . map singlePretty
     prettyStep Root = "$"
     prettyStep (Key k) = k
     prettyStep (Ix i) = show i
-    prettyText
-      :: ToJSON a
-      => a -> Text
+    prettyText :: ToJSON a => a -> Text
     prettyText = strConv Lenient . encodePretty
 
 -- | @diffStructures expected actual@ compares the structures of the two JSON values and reports each item in @actual@ that is not present in @expected@
 -- if @actual@ is a strict subset (or sub-object) of @expected@, the list should be null
 --
-diffStructures
-  :: Value -- ^ expected
+diffStructures ::
+     Value -- ^ expected
   -> Value -- ^ actual
   -> [JsonDiff] -- ^ differences from actual to expected
 diffStructures expected actual = diffStructureWithPath [Root] expected actual
@@ -95,7 +93,9 @@ arrayDiffStep :: JsonPath -> [Value] -> (Int, Value) -> [JsonDiff]
 arrayDiffStep path expected (n, actual) =
   case filter (sameShape actual) expected of
     [] -> [NotFoundInArray newPath expected actual]
-    xs -> concat $ traverse (\x -> diffStructureWithPath newPath x actual) xs
+    xs ->
+      minimumBy (comparing length) $
+      map (\x -> diffStructureWithPath newPath x actual) xs
   where
     newPath = Ix n : path
       -- FIXME return differences of object with least differences
