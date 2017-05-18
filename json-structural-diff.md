@@ -37,7 +37,7 @@ data JsonDiff
 These data structures represent the entire result of the structural diff:
 
 1. where the diff was found
-2. the type of mismatch (via the constructor)
+2. the type of mismatch (encoded via the constructor)
 3. the mismatched values
 
 The path is defined like this:
@@ -64,26 +64,68 @@ diffStructures expected actual = diffStructureWithPath [Root] expected actual
 
 If you're unfamiliar with Haskell syntax, `diffStructures` is a function that takes a `Value`, then another `Value` and returns a list of `JsonDiff`s
 
-The actual algorithm is implemented in a private helper function which takes the path as an additional parameter.
-The path always starts with `Root`.
+The algorithm always compares the JSON elements at the same path, starting at the `Root`.
+If our `actual` is equal to or a subset of the `expected`, there's no diff.
+
+As long as we make sure that we take the same path in both `expected` and `actual`, the algorithm basically writes itself:
 
 ```haskell
 diffStructureWithPath :: JsonPath -> Value -> Value -> [JsonDiff]
 diffStructureWithPath _ _ Json.Null = []
     -- null is a valid subset of any JSON
+```
+
+The first match is trivial - a null value is a subset of anything, so there's no diff.
+
+```haskell
 diffStructureWithPath _ (Json.Bool _) (Json.Bool _) = []
 diffStructureWithPath _ (Json.Number _) (Json.Number _) = []
 diffStructureWithPath _ (Json.String _) (Json.String _) = []
+```
+
+Then we match on the three value types (`Bool`s, `Number`s and `String`s) on both sides.
+These definitions only match if both JSON values at the same path are both a `Bool`, a `Number` or a `String`.
+
+Since we only want to compare the structure, we ignore the actual value (with the `_` identifier) and always return an empty diff.
+
+```haskell
 diffStructureWithPath path (Json.Object expected) (Json.Object actual) =
-  concatMap (objDiffStep path expected) (Map.toList actual)
+  concatMap (diffObjectAtKey path expected) (Map.toList actual)
+```
+
+This is the first interesting case: comparing two objects.
+We apply the helper function `diffObjectAtKey` to each key-value pair in the actual map, taking the current path and the expected map with us.
+
+```haskell
+diffObjectAtKey :: JsonPath -> HashMap Text Value -> (Text, Value) -> [JsonDiff]
+diffObjectAtKey path expected (k, vActual) =
+  case Map.lookup k expected of
+    Just vExpected -> diffStructureWithPath newPath vExpected vActual
+    Nothing -> [KeyNotPresent newPath k]
+  where
+    newPath = Key k : path
+```
+
+This function 
+
+```haskell
 diffStructureWithPath path (Json.Array expected) (Json.Array actual) =
   concatMap
     (arrayDiffStep path (toList expected))
     (zip [0 :: Int ..] $ toList actual)
-diffStructureWithPath path a b = [WrongType path a b]
+```
 
-objDiffStep :: JsonPath -> HashMap Text Value -> (Text, Value) -> [JsonDiff]
-objDiffStep path expected (k, vActual) =
+
+
+```haskell
+diffStructureWithPath path a b = [WrongType path a b]
+```
+
+
+
+```haskell
+diffObjectAtKey :: JsonPath -> HashMap Text Value -> (Text, Value) -> [JsonDiff]
+diffObjectAtKey path expected (k, vActual) =
   case Map.lookup k expected of
     Just vExpected -> diffStructureWithPath newPath vExpected vActual
     Nothing -> [KeyNotPresent newPath k]
