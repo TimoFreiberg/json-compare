@@ -92,7 +92,7 @@ diffObjectWithEntry path expected (k, vActual) =
 
 diffArrayWithElement :: JsonPath -> [Value] -> (Int, Value) -> [JsonDiff]
 diffArrayWithElement path expected (n, actual) =
-  case filter (sameShape actual) expected of
+  case filter (sameType actual) expected of
     [] -> [NotFoundInArray newPath expected actual]
     xs ->
       minimumBy (comparing length) $
@@ -100,11 +100,11 @@ diffArrayWithElement path expected (n, actual) =
   where
     newPath = Ix n : path
 
-sameShape :: Value -> Value -> Bool
-sameShape Json.Null Json.Null = True
-sameShape (Json.Bool _) (Json.Bool _) = True
-sameShape (Json.Number _) (Json.Number _) = True
-sameShape (Json.String _) (Json.String _) = True
-sameShape (Json.Object _) (Json.Object _) = True
-sameShape (Json.Array _) (Json.Array _) = True
-sameShape _ _ = False
+sameType :: Value -> Value -> Bool
+sameType Json.Null Json.Null = True
+sameType (Json.Bool _) (Json.Bool _) = True
+sameType (Json.Number _) (Json.Number _) = True
+sameType (Json.String _) (Json.String _) = True
+sameType (Json.Object _) (Json.Object _) = True
+sameType (Json.Array _) (Json.Array _) = True
+sameType _ _ = False
