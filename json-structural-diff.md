@@ -59,7 +59,7 @@ diffStructures
   :: Value -- ^ expected/what we want to match
   -> Value -- ^ actual/what we implemented
   -> [JsonDiff] -- ^ differences from actual to expected
-diffStructures expected actual = diffStructureWithPath [Root] expected actual
+diffStructures expected actual = diffStructureAtPath [Root] expected actual
 ```
 
 If you're unfamiliar with Haskell syntax, `diffStructures` is a function that takes a `Value`, then another `Value` and returns a list of `JsonDiff`s
@@ -70,17 +70,17 @@ If our `actual` is equal to or a subset of the `expected`, there's no diff.
 As long as we make sure that we take the same path in both `expected` and `actual`, the algorithm basically writes itself:
 
 ```haskell
-diffStructureWithPath :: JsonPath -> Value -> Value -> [JsonDiff]
-diffStructureWithPath _ _ Json.Null = []
+diffStructureAtPath :: JsonPath -> Value -> Value -> [JsonDiff]
+diffStructureAtPath _ _ Json.Null = []
     -- null is a valid subset of any JSON
 ```
 
 The first match is trivial - a null value is a subset of anything, so there's no diff.
 
 ```haskell
-diffStructureWithPath _ (Json.Bool _) (Json.Bool _) = []
-diffStructureWithPath _ (Json.Number _) (Json.Number _) = []
-diffStructureWithPath _ (Json.String _) (Json.String _) = []
+diffStructureAtPath _ (Json.Bool _) (Json.Bool _) = []
+diffStructureAtPath _ (Json.Number _) (Json.Number _) = []
+diffStructureAtPath _ (Json.String _) (Json.String _) = []
 ```
 
 Then we match on the three value types (`Bool`s, `Number`s and `String`s) on both sides.
@@ -89,57 +89,79 @@ These definitions only match if both JSON values at the same path are both a `Bo
 Since we only want to compare the structure, we ignore the actual value (with the `_` identifier) and always return an empty diff.
 
 ```haskell
-diffStructureWithPath path (Json.Object expected) (Json.Object actual) =
-  concatMap (diffObjectAtKey path expected) (Map.toList actual)
+diffStructureAtPath path (Json.Object expected) (Json.Object actual) =
+  concatMap (diffObjectWithEntry path expected) (Map.toList actual)
 ```
 
 This is the first interesting case: comparing two objects.
-We apply the helper function `diffObjectAtKey` to each key-value pair in the actual map, taking the current path and the expected map with us.
+We apply the helper function `diffObjectWithEntry` to each key-value pair in the actual map, taking the current path and the expected map with us.
+
+The diff of both objects is the sum of the diffs at each key of the actual object.
 
 ```haskell
-diffObjectAtKey :: JsonPath -> HashMap Text Value -> (Text, Value) -> [JsonDiff]
-diffObjectAtKey path expected (k, vActual) =
+diffObjectWithEntry :: JsonPath -> HashMap Text Value -> (Text, Value) -> [JsonDiff]
+diffObjectWithEntry path expected (k, vActual) =
   case Map.lookup k expected of
-    Just vExpected -> diffStructureWithPath newPath vExpected vActual
+    Just vExpected -> diffStructureAtPath newPath vExpected vActual
     Nothing -> [KeyNotPresent newPath k]
   where
     newPath = Key k : path
 ```
 
-This function 
+If the key is not present, we return the `KeyNotPresent` diff.
+
+If the key is present, we enter the main diff function again, comparing the values at the key.
 
 ```haskell
-diffStructureWithPath path (Json.Array expected) (Json.Array actual) =
+diffStructureAtPath path (Json.Array expected) (Json.Array actual) =
   concatMap
-    (arrayDiffStep path (toList expected))
+    (diffArrayWithElement path (toList expected))
     (zip [0 :: Int ..] $ toList actual)
 ```
 
+Comparing two arrays is implemented similarly.
 
+We diff each element from the actual array with the entire expected array.
 
-```haskell
-diffStructureWithPath path a b = [WrongType path a b]
-```
-
-
+To keep track of the path we're exploring, we index each element with `zip [0..]`<sup id="bZip">[1](#fZip)</sup>
 
 ```haskell
-diffObjectAtKey :: JsonPath -> HashMap Text Value -> (Text, Value) -> [JsonDiff]
-diffObjectAtKey path expected (k, vActual) =
-  case Map.lookup k expected of
-    Just vExpected -> diffStructureWithPath newPath vExpected vActual
-    Nothing -> [KeyNotPresent newPath k]
-  where
-    newPath = Key k : path
-
-arrayDiffStep :: JsonPath -> [Value] -> (Int, Value) -> [JsonDiff]
-arrayDiffStep path expected (n, actual) =
-  case filter (sameShape actual) expected of
+diffArrayWithElement :: JsonPath -> [Value] -> (Int, Value) -> [JsonDiff]
+diffArrayWithElement path expected (n, actual) =
+  case filter (sameType actual) expected of
     [] -> [NotFoundInArray newPath expected actual]
-    xs -> concat $ traverse (\x -> diffStructureWithPath newPath x actual) xs
+    xs ->
+      minimumBy (comparing length) $
+      map (\x -> diffStructureWithPath newPath x actual) xs
   where
     newPath = Ix n : path
-      -- FIXME return differences of object with least differences
 ```
 
-## example
+This time, we try to find elements in the expected array that have the same type as the actual.
+
+If none are found, the `NotFoundInArray` diff is returned.
+
+If some are found, we return the smallest diff.
+(Because if one element matches perfectly, we don't want to hear about the fifty others that don't)
+
+### JSON arrays as lists or as tuples
+
+The way we diff arrays interprets them as (usually) homogenous lists.
+This makes the most sense in our case, because we work in a Java environment.
+Java doesn't have tuples and it is unidiomatic to use heterogenous lists.
+
+JSON arrays can also be used as tuples, in which case it would be wrong to compare elements at different indices.
+Instead, it would require diffing arrays pairwise.
+
+
+```haskell
+diffStructureAtPath path a b = [WrongType path a b]
+```
+
+
+
+## Example usage
+
+## Footnotes
+<b id="fZip">1</b> The expression `zip [0..] ["foo","bar","baz"]` evaluates to `[(0,"foo"),(1,"bar"),(2,"baz")]`. Thanks to lazy evaluation, we can use the infinite list [0..] for this purpose. [↩](#bZip)
+
