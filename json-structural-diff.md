@@ -19,6 +19,10 @@ Additionally, JSON values at the same path might have a different type.
 
 ## The solution, with code
 
+The complete code is available on [my github](https://github.com/TimoFreiberg/json-compare).
+
+#### Types
+
 I represented the possible structural differences with the following [data type](https://en.wikipedia.org/wiki/Algebraic_data_type):
 
 ```haskell
@@ -36,7 +40,7 @@ data JsonDiff
 
 These data structures represent the entire result of the structural diff:
 
-1. where the diff was found
+1. the path where the diff was found
 2. the type of mismatch (encoded via the constructor)
 3. the mismatched values
 
@@ -123,7 +127,7 @@ Comparing two arrays is implemented similarly.
 
 We diff each element from the actual array with the entire expected array.
 
-To keep track of the path we're exploring, we index each element with `zip [0..]`<sup id="bZip">[1](#fZip)</sup>
+To keep track of the path we're exploring, we index each element with `zip [0..]`<sup id="bZip">[1](#fnZip)</sup>
 
 ```haskell
 diffArrayWithElement :: JsonPath -> [Value] -> (Int, Value) -> [JsonDiff]
@@ -144,7 +148,7 @@ If none are found, the `NotFoundInArray` diff is returned.
 If some are found, we return the smallest diff.
 (Because if one element matches perfectly, we don't want to hear about the fifty others that don't)
 
-### JSON arrays as lists or as tuples
+#### Aside: JSON arrays as lists or as tuples
 
 The way we diff arrays interprets them as (usually) homogenous lists.
 This makes the most sense in our case, because we work in a Java environment.
@@ -152,6 +156,8 @@ Java doesn't have tuples and it is unidiomatic to use heterogenous lists.
 
 JSON arrays can also be used as tuples, in which case it would be wrong to compare elements at different indices.
 Instead, it would require diffing arrays pairwise.
+
+
 
 
 ```haskell
@@ -163,5 +169,5 @@ diffStructureAtPath path a b = [WrongType path a b]
 ## Example usage
 
 ## Footnotes
-<b id="fZip">1</b> The expression `zip [0..] ["foo","bar","baz"]` evaluates to `[(0,"foo"),(1,"bar"),(2,"baz")]`. Thanks to lazy evaluation, we can use the infinite list [0..] for this purpose. [↩](#bZip)
+<b id="fnZip">1</b> The expression `zip [0..] ["foo","bar","baz"]` evaluates to `[(0,"foo"),(1,"bar"),(2,"baz")]`. Thanks to lazy evaluation, we can use the infinite list [0..] for this purpose. [↩](#bZip)
 
