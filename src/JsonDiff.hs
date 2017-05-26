@@ -6,7 +6,7 @@ module JsonDiff
   , JsonDiff
   ) where
 
-import Data.Aeson (Value)
+import Data.Aeson (Value, eitherDecode)
 import qualified Data.Aeson as Json
 import qualified Data.HashMap.Strict as Map
 import Data.HashMap.Strict (HashMap)
@@ -25,6 +25,7 @@ data JsonDiff
   = KeyNotPresent JsonPath -- ^ the path to the object
                   Text -- ^ the key that was not found
   | NotFoundInArray JsonPath -- ^ the path to the array
+                    Int -- ^ the index of the found element
                     JsonType -- ^ the type that was not found
   | WrongType JsonPath -- ^ the path to the JSON value
               JsonType -- ^ the type of the expected value
@@ -44,15 +45,16 @@ prettyDiff :: [JsonDiff] -> Text
 prettyDiff = Text.unlines . map singlePretty
   where
     singlePretty :: JsonDiff -> Text
-    singlePretty (KeyNotPresent p k) = "No key " <> show k <> prettyPath p
-    singlePretty (NotFoundInArray p t) =
-      "No value with type " <> show t <> prettyPath p
+    singlePretty (KeyNotPresent p k) = "Expected key: " <> show k <> prettyPath p
+    singlePretty (NotFoundInArray p i t) =
+      "Expected type: " <> show t <> " for index: " <> show i <>
+      prettyPath p
     singlePretty (WrongType p expected actual) =
-      "Wrong type, expected: " <> show expected <> ", actual: " <> show actual <>
+      "Expected type: " <> show expected <> ", actual: " <> show actual <>
       prettyPath p
     prettyPath :: JsonPath -> Text
     prettyPath p =
-      "\n  Found at path: " <>
+      "\n  At path: " <>
       (Text.concat . intersperse "." $ map prettyStep (reverse p))
     prettyStep :: JsonPathStep -> Text
     prettyStep Root = "$"
@@ -77,29 +79,26 @@ diffStructureAtPath _ (Json.String _) (Json.String _) = []
 diffStructureAtPath path (Json.Object expected) (Json.Object actual) =
   concatMap (diffObjectWithEntry path expected) (Map.toList actual)
 diffStructureAtPath path (Json.Array expected) (Json.Array actual) =
-  concatMap
-    (diffArrayWithElement path (toList expected))
-    (zip [0 :: Int ..] $ toList actual)
+  concatMap (diffArrayWithElement path (toList expected)) (toIndexedList actual)
 diffStructureAtPath path a b = [WrongType path (toType a) (toType b)]
 
 diffObjectWithEntry ::
      JsonPath -> HashMap Text Value -> (Text, Value) -> [JsonDiff]
 diffObjectWithEntry path expected (k, vActual) =
   case Map.lookup k expected of
-    Just vExpected -> diffStructureAtPath newPath vExpected vActual
-    Nothing -> [KeyNotPresent newPath k]
-  where
-    newPath = Key k : path
+    Just vExpected -> diffStructureAtPath (Key k : path) vExpected vActual
+    Nothing -> [KeyNotPresent path k]
 
 diffArrayWithElement :: JsonPath -> [Value] -> (Int, Value) -> [JsonDiff]
 diffArrayWithElement path expected (n, actual) =
   case filter (sameType actual) expected of
-    [] -> [NotFoundInArray newPath (toType actual)]
+    [] -> [NotFoundInArray path n (toType actual)]
     xs ->
       minimumBy (comparing length) $
-      map (\x -> diffStructureAtPath newPath x actual) xs
-  where
-    newPath = Ix n : path
+      map (\x -> diffStructureAtPath (Ix n : path) x actual) xs
+
+toIndexedList :: Foldable l => l a -> [(Int, a)]
+toIndexedList = zip [0 ..] . toList
 
 sameType :: Value -> Value -> Bool
 sameType = (==) `on` toType
