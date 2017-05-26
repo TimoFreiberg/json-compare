@@ -8,8 +8,6 @@ module JsonDiff
 
 import Data.Aeson (Value)
 import qualified Data.Aeson as Json
-import Data.Aeson (ToJSON)
-import Data.Aeson.Encode.Pretty (encodePretty)
 import qualified Data.HashMap.Strict as Map
 import Data.HashMap.Strict (HashMap)
 import qualified Data.Text as Text
@@ -27,25 +25,30 @@ data JsonDiff
   = KeyNotPresent JsonPath -- ^ the path to the object
                   Text -- ^ the key that was not found
   | NotFoundInArray JsonPath -- ^ the path to the array
-                    [Value] -- ^ the elements in the array
-                    Value -- ^ the element that was not found
+                    JsonType -- ^ the type of the element that was not found
   | WrongType JsonPath -- ^ the path to the JSON value
-              Value -- ^ the expected value
-              Value -- ^ the actual value
+              JsonType -- ^ the type of the expected value
+              JsonType -- ^ the type of the actual value
   deriving (Show)
+
+data JsonType
+  = Null
+  | Bool
+  | Number
+  | String
+  | Object
+  | Array
+  deriving (Eq, Enum, Bounded, Show)
 
 prettyDiff :: [JsonDiff] -> Text
 prettyDiff = Text.unlines . map singlePretty
   where
     singlePretty :: JsonDiff -> Text
-    singlePretty (KeyNotPresent p t) = "Key not found: " <> t <> prettyPath p
-    singlePretty (NotFoundInArray p arr val) =
-      "No structure matching " <> prettyText val <> " found in " <>
-      prettyText arr <>
-      prettyPath p
+    singlePretty (KeyNotPresent p k) = "No key " <> show k <> prettyPath p
+    singlePretty (NotFoundInArray p t) =
+      "No value with type " <> show t <> prettyPath p
     singlePretty (WrongType p expected actual) =
-      "Wrong type, expected: " <> prettyText expected <> ", actual: " <>
-      prettyText actual <>
+      "Wrong type, expected: " <> show expected <> ", actual: " <> show actual <>
       prettyPath p
     prettyPath :: JsonPath -> Text
     prettyPath p =
@@ -55,8 +58,6 @@ prettyDiff = Text.unlines . map singlePretty
     prettyStep Root = "$"
     prettyStep (Key k) = k
     prettyStep (Ix i) = show i
-    prettyText :: ToJSON a => a -> Text
-    prettyText = strConv Lenient . encodePretty
 
 -- | @diffStructures expected actual@ compares the structures of the two JSON values and reports each item in @actual@ that is not present in @expected@
 -- if @actual@ is a strict subset (or sub-object) of @expected@, the list should be null
@@ -79,7 +80,7 @@ diffStructureAtPath path (Json.Array expected) (Json.Array actual) =
   concatMap
     (diffArrayWithElement path (toList expected))
     (zip [0 :: Int ..] $ toList actual)
-diffStructureAtPath path a b = [WrongType path a b]
+diffStructureAtPath path a b = [WrongType path (toType a) (toType b)]
 
 diffObjectWithEntry ::
      JsonPath -> HashMap Text Value -> (Text, Value) -> [JsonDiff]
@@ -93,7 +94,7 @@ diffObjectWithEntry path expected (k, vActual) =
 diffArrayWithElement :: JsonPath -> [Value] -> (Int, Value) -> [JsonDiff]
 diffArrayWithElement path expected (n, actual) =
   case filter (sameType actual) expected of
-    [] -> [NotFoundInArray newPath expected actual]
+    [] -> [NotFoundInArray newPath (toType actual)]
     xs ->
       minimumBy (comparing length) $
       map (\x -> diffStructureAtPath newPath x actual) xs
@@ -101,10 +102,12 @@ diffArrayWithElement path expected (n, actual) =
     newPath = Ix n : path
 
 sameType :: Value -> Value -> Bool
-sameType Json.Null Json.Null = True
-sameType (Json.Bool _) (Json.Bool _) = True
-sameType (Json.Number _) (Json.Number _) = True
-sameType (Json.String _) (Json.String _) = True
-sameType (Json.Object _) (Json.Object _) = True
-sameType (Json.Array _) (Json.Array _) = True
-sameType _ _ = False
+sameType = (==) `on` toType
+
+toType :: Value -> JsonType
+toType Json.Null = Null
+toType (Json.Bool _) = Bool
+toType (Json.Number _) = Number
+toType (Json.String _) = String
+toType (Json.Object _) = Object
+toType (Json.Array _) = Array
