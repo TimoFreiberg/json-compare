@@ -52,7 +52,7 @@ prettyDiff = Text.unlines . map singlePretty
       prettyPath p
     prettyPath :: JsonPath -> Text
     prettyPath p =
-      "\nFound at path: " <>
+      "\n  Found at path: " <>
       (Text.concat . intersperse "." $ map prettyStep (reverse p))
     prettyStep :: JsonPathStep -> Text
     prettyStep Root = "$"

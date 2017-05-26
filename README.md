@@ -60,19 +60,12 @@ $ cat actual.json
 ```bash
 $ json-compare expected.json actual.json
 
-Key not found: notThere
-Found at path: $.notThere
-Wrong type, expected: "bar", actual: 42
-Found at path: $.foo
-Wrong type, expected: 42, actual: "bar"
-Found at path: $.baz
-Wrong type, expected: [
-    1,
-    2
-], actual: {
-    "x": [
-        1
-    ]
-}
-Found at path: $.quux
+No key "notThere"
+  Found at path: $.notThere
+Wrong type, expected: String, actual: Number
+  Found at path: $.foo
+Wrong type, expected: Number, actual: String
+  Found at path: $.baz
+Wrong type, expected: Array, actual: Object
+  Found at path: $.quux
 ```
