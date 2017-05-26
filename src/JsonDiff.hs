@@ -25,7 +25,7 @@ data JsonDiff
   = KeyNotPresent JsonPath -- ^ the path to the object
                   Text -- ^ the key that was not found
   | NotFoundInArray JsonPath -- ^ the path to the array
-                    JsonType -- ^ the type of the element that was not found
+                    JsonType -- ^ the type that was not found
   | WrongType JsonPath -- ^ the path to the JSON value
               JsonType -- ^ the type of the expected value
               JsonType -- ^ the type of the actual value
