@@ -2,9 +2,8 @@
 
 module Main where
 
-import Data.Aeson (eitherDecode)
-import GHC.Base (String)
-import JsonDiff (JsonDiff, prettyDiff, diffStructures)
+import Data.Aeson (eitherDecode, Value)
+import JsonDiff ( prettyDiff, diffStructures)
 import qualified Options.Applicative as Opt
 import Options.Applicative (argument, str, metavar, help)
 import Protolude
@@ -29,15 +28,18 @@ opts =
 main :: IO ()
 main = do
   (Args expected actual) <- Opt.execParser opts
-  runDiff <$> readFile expected <*> readFile actual >>= \case
-    Right [] -> exitSuccess
-    Right diffs -> exit (prettyDiff diffs)
-    Left err -> exit (strConv Lenient err)
+  expec <- getJson expected
+  act <- getJson actual
+  case diffStructures expec act of
+    [] -> exitSuccess
+    diffs -> exit (prettyDiff diffs)
 
-exit :: Text -> IO a
-exit message = putText message >> exitFailure
+getJson :: FilePath -> IO Value
+getJson filename = do
+  contents <- readFile filename
+  case eitherDecode (strConv Lenient contents) of
+    Left parseErr -> exit ("Failed to parse " <> filename <> ": " <> parseErr)
+    Right json -> return json
 
-runDiff :: Text -> Text -> Either String [JsonDiff]
-runDiff expected actual =
-  diffStructures <$> eitherDecode (strConv Lenient expected) <*>
-  eitherDecode (strConv Lenient actual)
+exit :: Print a => a -> IO b
+exit message = putStrLn message >> exitFailure
