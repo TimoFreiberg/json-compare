@@ -3,9 +3,11 @@
 module Main where
 
 import Data.Aeson (eitherDecode, Value)
-import JsonDiff ( prettyDiff, diffStructures)
+import JsonDiff (diffStructures)
 import qualified Options.Applicative as Opt
 import Options.Applicative (argument, str, metavar, help)
+import Data.Text.Prettyprint.Doc
+import Data.Text.Prettyprint.Doc.Render.Text
 import Protolude
 
 data Args = Args
@@ -32,7 +34,10 @@ main = do
   act <- getJson actual
   case diffStructures expec act of
     [] -> exitSuccess
-    diffs -> exit (prettyDiff diffs)
+    diffs -> exit (renderDiff (pretty diffs))
+
+renderDiff :: Doc ann -> Text
+renderDiff = renderStrict . layoutPretty defaultLayoutOptions
 
 getJson :: FilePath -> IO Value
 getJson filename = do
