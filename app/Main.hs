@@ -29,7 +29,7 @@ opts =
 
 main :: IO ()
 main = do
-  (Args expected actual) <- Opt.execParser opts
+  Args expected actual <- Opt.execParser opts
   expec <- getJson expected
   act <- getJson actual
   case diffStructures expec act of
