@@ -16,15 +16,13 @@ main = do
             expected <- TL.readFile "test/expected.output"
             let diff = diffStructures jsonA jsonB
                 renderedDiff = (renderLazy . layoutPretty defaultLayoutOptions . pretty) diff
-            case TL.strip renderedDiff == TL.strip expected of
-                False -> do
+            when (TL.strip renderedDiff /= TL.strip expected) $ do
                     putText "Error: actual and expected diff do not match."
                     putText "Actual:"
                     putText (TL.toStrict renderedDiff)
                     putText "Expected:"
                     putText (TL.toStrict expected)
                     exitFailure
-                True -> pure ()
         _otherwise -> do
             putText "Uh oh, input isn’t proper JSON"
             exitFailure
