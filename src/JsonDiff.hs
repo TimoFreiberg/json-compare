@@ -1,16 +1,16 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ViewPatterns #-}
 
 module JsonDiff
   ( diffStructures
-  , prettyDiff
   , JsonDiff
   ) where
 
-import Data.Aeson (Value, eitherDecode)
+import Data.Aeson (Value)
 import qualified Data.Aeson as Json
 import qualified Data.HashMap.Strict as Map
 import Data.HashMap.Strict (HashMap)
-import qualified Data.Text as Text
+import Data.Text.Prettyprint.Doc
 import Protolude
 
 type JsonPath = [JsonPathStep]
@@ -41,25 +41,29 @@ data JsonType
   | Array
   deriving (Eq, Enum, Bounded, Show)
 
-prettyDiff :: [JsonDiff] -> Text
-prettyDiff = Text.unlines . map singlePretty
-  where
-    singlePretty :: JsonDiff -> Text
-    singlePretty (KeyNotPresent p k) = "Expected key: " <> show k <> prettyPath p
-    singlePretty (NotFoundInArray p i t) =
-      "Expected type: " <> show t <> " for index: " <> show i <>
-      prettyPath p
-    singlePretty (WrongType p expected actual) =
-      "Expected type: " <> show expected <> ", actual: " <> show actual <>
-      prettyPath p
-    prettyPath :: JsonPath -> Text
-    prettyPath p =
-      "\n  At path: " <>
-      (Text.concat . intersperse "." $ map prettyStep (reverse p))
-    prettyStep :: JsonPathStep -> Text
-    prettyStep Root = "$"
-    prettyStep (Key k) = k
-    prettyStep (Ix i) = show i
+instance Pretty JsonPathStep where
+    pretty step = case step of
+        Root  -> "$"
+        Key k -> pretty k
+        Ix i  -> pretty i
+    prettyList = concatWith (surround ".") . map pretty . reverse
+
+instance Pretty JsonType
+
+instance Pretty JsonDiff where
+    pretty diff = case diff of
+        KeyNotPresent path key -> appendPath path $
+            "Expected key:" <+> pretty key
+        NotFoundInArray path index ty -> appendPath path $
+            "Expected type" <+> squotes (pretty ty)
+            <+> "for index" <+> squotes (pretty index)
+        WrongType path expectedTy actualTy -> appendPath path $
+            "Expected type" <+> squotes (pretty expectedTy)
+            <> ", but the actual data had type" <+> squotes (pretty actualTy)
+      where
+        appendPath path x = nest 4 (vsep [x, "at path: " <+> pretty path])
+
+    prettyList = vsep . map pretty
 
 -- | @diffStructures expected actual@ compares the structures of the two JSON values and reports each item in @actual@ that is not present in @expected@
 -- if @actual@ is a strict subset (or sub-object) of @expected@, the list should be null

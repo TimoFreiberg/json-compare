@@ -25,6 +25,7 @@ library
                      , text
                      , aeson-pretty
                      , mtl
+                     , prettyprinter
   default-language:    Haskell2010
   default-extensions:  OverloadedStrings, NoImplicitPrelude
 
@@ -37,6 +38,7 @@ executable json-compare
                      , protolude >= 0.1.6 && < 0.2
                      , aeson
                      , optparse-applicative
+                     , prettyprinter
   default-language:    Haskell2010
   default-extensions:  OverloadedStrings, NoImplicitPrelude
 
