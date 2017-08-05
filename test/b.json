@@ -1,0 +1,11 @@
+{
+  "notThere": "doesn't matter",
+  "foo": 42,
+  "baz": "bar",
+  "quux": {
+    "x": [
+      1
+    ]
+  }
+}
+

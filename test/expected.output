@@ -1,0 +1,8 @@
+Expected key: notThere
+    at path:  $
+Expected type 'String', but the actual data had type 'Number'
+    at path:  $.foo
+Expected type 'Number', but the actual data had type 'String'
+    at path:  $.baz
+Expected type 'Array', but the actual data had type 'Object'
+    at path:  $.quux
