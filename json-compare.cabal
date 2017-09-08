@@ -17,6 +17,7 @@ library
   hs-source-dirs:      src
   ghc-options:         -Wall
   exposed-modules:     JsonDiff
+                     , JsonDiff.Args
   build-depends:       base >= 4.7 && < 5
                      , protolude >= 0.1.6 && < 0.2
                      , aeson

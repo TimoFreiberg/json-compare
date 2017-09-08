@@ -3,34 +3,30 @@
 
 module Main where
 
-import Data.Aeson (eitherDecode, Value)
-import JsonDiff (diffStructures)
-import Options.Applicative (argument, str, metavar, help, Parser, ParserInfo, info, helper, fullDesc, progDesc, header, execParser)
+import Data.Aeson (Value, eitherDecode)
 import Data.Text.Prettyprint.Doc
 import Data.Text.Prettyprint.Doc.Render.Text
+import JsonDiff (diffStructures)
+-- import Options.Applicative
+--        (Parser, ParserInfo, argument, execParser, execParserPure,
+--         fullDesc, handleParseResult, header, help, helper, info, metavar,
+--         prefs, progDesc, str, strArgument)
 import Protolude
 
-
-parseArgs :: Parser Args
-parseArgs =
-  Args <$> argument str (metavar "FILE1" <> help "The expected JSON") <*>
-  argument str (metavar "FILE2" <> help "The actual JSON")
-
-opts :: ParserInfo Args
-opts =
-  info
-    (helper <*> parseArgs)
-    (fullDesc <> progDesc "Diffs two JSON documents by structure" <>
-     header "json-diff: structural differ")
+import JsonDiff.Args (Args(Args), parseArgs)
 
 main :: IO ()
-main = do
-  Args expected actual <- execParser opts
-  expec <- getJson expected
-  act <- getJson actual
-  case diffStructures expec act of
-    [] -> exitSuccess
-    diffs -> exit (renderDiff (pretty diffs))
+main = getArgs >>= app
+
+app :: [FilePath] -> IO b
+app args = do
+  (Args oldPath newPath) <-
+    parseArgs args
+  old <- getJson oldPath
+  new <- getJson newPath
+  let diffs = diffStructures old new
+  when (not (null diffs)) (putStrLn (renderDiff (pretty diffs)))
+  exitSuccess
 
 renderDiff :: Doc ann -> Text
 renderDiff = renderStrict . layoutPretty defaultLayoutOptions
@@ -44,12 +40,6 @@ getJson filename = do
 
 exit :: Print a => a -> IO b
 exit message = putStrLn message >> exitFailure
-
-data Args = Args
-  { fileExpected :: FilePath
-  , fileActual :: FilePath
-  }
-
 {-
 GIT_EXTERNAL_DIFF
            When the environment variable GIT_EXTERNAL_DIFF is set, the program named by it is called, instead of the diff invocation described above. For a path that is added, removed,
