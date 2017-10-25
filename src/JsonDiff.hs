@@ -50,9 +50,8 @@ diffStructures expected actual = diffStructureAtPath [Root] expected actual
 
 diffStructureAtPath :: JsonPath -> Value -> Value -> [Diff JsonDiff]
 diffStructureAtPath p a b
-  | not $ sameType a b =
-    [Diff.First (Type (toType a)), Diff.Second (Type (toType b))]
-    -- null is a valid subset of any JSON
+  | not $ sameType a b = change (Type $ toType a) (Type $ toType b)
+  | both isObject a b = 
 diffStructureAtPath _ (Json.Bool _) (Json.Bool _) = []
 diffStructureAtPath _ (Json.Number _) (Json.Number _) = []
 diffStructureAtPath _ (Json.String _) (Json.String _) = []
@@ -79,6 +78,11 @@ diffArrayWithElement path expected (n, actual) =
 
 toIndexedList :: Foldable l => l a -> [(Int, a)]
 toIndexedList = zip [0 ..] . toList
+
+change a b = [Diff.First a, Diff.Second b]
+
+both pred a b = pred a && pred b
+isObject = (== Object) . toType
 
 sameType :: Value -> Value -> Bool
 sameType = (==) `on` toType
