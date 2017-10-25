@@ -8,9 +8,12 @@ module JsonDiff
 
 import Data.Aeson (Value)
 import qualified Data.Aeson as Json
+import qualified Data.Algorithm.Diff as Diff
+import Data.Algorithm.Diff (Diff)
 import qualified Data.HashMap.Strict as Map
 import Data.HashMap.Strict (HashMap)
 import Data.Text.Prettyprint.Doc
+
 import Protolude
 
 type JsonPath = [JsonPathStep]
@@ -22,14 +25,9 @@ data JsonPathStep
   deriving (Show)
 
 data JsonDiff
-  = KeyNotPresent JsonPath -- ^ the path to the object
-                  Text -- ^ the key that was not found
-  | NotFoundInArray JsonPath -- ^ the path to the array
-                    Int -- ^ the index of the found element
-                    JsonType -- ^ the type that was not found
-  | WrongType JsonPath -- ^ the path to the JSON value
-              JsonType -- ^ the type of the expected value
-              JsonType -- ^ the type of the actual value
+  = MapKey Text -- ^ the key that changed
+  | ArrayIx Int -- ^ the index where something changed
+  | Type JsonType -- ^ the type that changed
   deriving (Show)
 
 data JsonType
@@ -41,41 +39,19 @@ data JsonType
   | Array
   deriving (Eq, Enum, Bounded, Show)
 
-instance Pretty JsonPathStep where
-    pretty step = case step of
-        Root  -> "$"
-        Key k -> pretty k
-        Ix i  -> pretty i
-    prettyList = concatWith (surround ".") . map pretty . reverse
-
-instance Pretty JsonType
-
-instance Pretty JsonDiff where
-    pretty diff = case diff of
-        KeyNotPresent path key -> appendPath path $
-            "Expected key:" <+> pretty key
-        NotFoundInArray path index ty -> appendPath path $
-            "Expected type" <+> squotes (pretty ty)
-            <+> "for index" <+> squotes (pretty index)
-        WrongType path expectedTy actualTy -> appendPath path $
-            "Expected type" <+> squotes (pretty expectedTy)
-            <> ", but the actual data had type" <+> squotes (pretty actualTy)
-      where
-        appendPath path x = nest 4 (vsep [x, "at path: " <+> pretty path])
-
-    prettyList = vsep . map pretty
-
 -- | @diffStructures expected actual@ compares the structures of the two JSON values and reports each item in @actual@ that is not present in @expected@
 -- if @actual@ is a strict subset (or sub-object) of @expected@, the list should be null
 --
 diffStructures ::
      Value -- ^ expected
   -> Value -- ^ actual
-  -> [JsonDiff] -- ^ differences from actual to expected
+  -> [Diff JsonDiff] -- ^ differences from actual to expected
 diffStructures expected actual = diffStructureAtPath [Root] expected actual
 
-diffStructureAtPath :: JsonPath -> Value -> Value -> [JsonDiff]
-diffStructureAtPath _ _ Json.Null = []
+diffStructureAtPath :: JsonPath -> Value -> Value -> [Diff JsonDiff]
+diffStructureAtPath p a b
+  | not $ sameType a b =
+    [Diff.First (Type (toType a)), Diff.Second (Type (toType b))]
     -- null is a valid subset of any JSON
 diffStructureAtPath _ (Json.Bool _) (Json.Bool _) = []
 diffStructureAtPath _ (Json.Number _) (Json.Number _) = []
