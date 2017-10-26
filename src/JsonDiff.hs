@@ -45,44 +45,37 @@ data JsonType
 diffStructures ::
      Value -- ^ expected
   -> Value -- ^ actual
-  -> [Diff JsonDiff] -- ^ differences from actual to expected
+  -> [(JsonPath, Diff JsonDiff)] -- ^ differences from actual to expected
 diffStructures expected actual = diffStructureAtPath [Root] expected actual
 
-diffStructureAtPath :: JsonPath -> Value -> Value -> [Diff JsonDiff]
+diffStructureAtPath :: JsonPath -> Value -> Value -> [(JsonPath, Diff JsonDiff)]
 diffStructureAtPath p a b
-  | not $ sameType a b = change (Type $ toType a) (Type $ toType b)
-  | both isObject a b = 
-diffStructureAtPath _ (Json.Bool _) (Json.Bool _) = []
-diffStructureAtPath _ (Json.Number _) (Json.Number _) = []
-diffStructureAtPath _ (Json.String _) (Json.String _) = []
-diffStructureAtPath path (Json.Object expected) (Json.Object actual) =
-  concatMap (diffObjectWithEntry path expected) (Map.toList actual)
-diffStructureAtPath path (Json.Array expected) (Json.Array actual) =
-  concatMap (diffArrayWithElement path (toList expected)) (toIndexedList actual)
-diffStructureAtPath path a b = [WrongType path (toType a) (toType b)]
+  | not $ sameType a b = change p (Type $ toType a) (Type $ toType b)
+diffStructureAtPath p (Json.Object a) (Json.Object b) =
+  concatMap diffAtKey keyDiffs
+  where
+    keyDiffs = Diff.getDiff (sort $ Map.keys a) (sort $ Map.keys b)
+    diffAtKey (Diff.Both k1 k2) =
+      diffStructureAtPath (Key k1 : p) (a Map.! k1) (b Map.! k2)
+    diffAtKey (Diff.First k) = [(Key k : p, Diff.First $ MapKey k)]
+    diffAtKey (Diff.Second k) = [(Key k : p, Diff.Second $ MapKey k)]
+diffStructureAtPath p (Json.Array a) (Json.Array b) = []
+  --   zip (map ((: p) . Ix) [0..]) $ map (mapDiff snd) $
+  -- Diff.getDiffBy (\(i,v1) (_, v2) -> null $ diffStructureAtPath (Ix i : p) v1 v2) (toIndexedList a) (toIndexedList b)
+diffStructureAtPath p a b
+  | sameType a b = [(p, Diff.Both (typ a) (typ b))]
+  where
+    typ = Type . toType
 
-diffObjectWithEntry ::
-     JsonPath -> HashMap Text Value -> (Text, Value) -> [JsonDiff]
-diffObjectWithEntry path expected (k, vActual) =
-  case Map.lookup k expected of
-    Just vExpected -> diffStructureAtPath (Key k : path) vExpected vActual
-    Nothing -> [KeyNotPresent path k]
-
-diffArrayWithElement :: JsonPath -> [Value] -> (Int, Value) -> [JsonDiff]
-diffArrayWithElement path expected (n, actual) =
-  case filter (sameType actual) expected of
-    [] -> [NotFoundInArray path n (toType actual)]
-    xs ->
-      minimumBy (comparing length) $
-      map (\x -> diffStructureAtPath (Ix n : path) x actual) xs
+mapDiff f (Diff.First a) = Diff.First (f a)
+mapDiff f (Diff.Second a) = Diff.Second (f a)
+mapDiff f (Diff.Both a1 a2) = Diff.Both (f a1) (f a2)
 
 toIndexedList :: Foldable l => l a -> [(Int, a)]
 toIndexedList = zip [0 ..] . toList
 
-change a b = [Diff.First a, Diff.Second b]
-
-both pred a b = pred a && pred b
-isObject = (== Object) . toType
+change :: JsonPath -> a -> a -> [(JsonPath, Diff a)]
+change p a b = [(p, Diff.First a), (p, Diff.Second b)]
 
 sameType :: Value -> Value -> Bool
 sameType = (==) `on` toType
