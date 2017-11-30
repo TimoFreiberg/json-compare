@@ -25,7 +25,7 @@ app args = do
   old <- getJson oldPath
   new <- getJson newPath
   let diffs = diffStructures old new
-  when (not (null diffs)) (putStrLn (renderDiff (pretty diffs)))
+  unless (null diffs) (putStrLn (renderDiff (pretty diffs)))
   exitSuccess
 
 renderDiff :: Doc ann -> Text
