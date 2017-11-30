@@ -17,7 +17,7 @@ main = do
       putStrLn (encodePretty jsonA)
       putStrLn (encodePretty jsonB)
       let diff = diffStructures jsonA jsonB
-      print diff
+      putStrLn . renderLazy . layoutPretty defaultLayoutOptions . pretty $ diff
             -- expected <- TL.readFile "test/expected.output"
             -- let diff = diffStructures jsonA jsonB
             --     renderedDiff = (renderLazy . layoutPretty defaultLayoutOptions . pretty) diff
